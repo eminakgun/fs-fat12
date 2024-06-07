@@ -313,7 +313,7 @@ void fat12_fs::mkdir(const string& path) {
             dir_name = token;
             if (token != tokens[tokens.size() - 1])
             {
-                std::cout << "Looking for: " << token << "in: " << next_dir->filename << std::endl;
+                std::cout << "Looking for: " << token << " in: " << next_dir->filename << std::endl;
                 auto found_dir = find_dir(next_dir, token);
                 if (found_dir == nullptr)
                     throw std::invalid_argument("Invalid folder path: " + token);
@@ -389,7 +389,7 @@ DirectoryEntry* fat12_fs::find_empty_dir(DirectoryEntry* current){
 
                 fat_entry = FAT[fat_idx]; 
                 cluster_num = fat_entry;
-            } while (!is_last_cluster(fat_idx));
+            } while (!is_last_cluster(fat_entry));
             std::cout << "End search empty cluster" << std::endl; 
         }
     }
@@ -397,8 +397,22 @@ DirectoryEntry* fat12_fs::find_empty_dir(DirectoryEntry* current){
     return nullptr;
 }
 
+
 // TODO
 // Traverse through whole file system
+void fat12_fs::traverse_all(){
+    std::cout << "traverse_all!!!!" << std::endl;
+    this->root = reinterpret_cast<DirectoryEntry*>(&fs_buffer[root_dir_start]);
+    for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
+        if (!is_directory_free(root[i]))
+        {
+            std::cout << i << "th Directory:\n" << root[i] << std::endl;
+            traverse(&root[i]);
+        }
+    }
+}
+
+
 void fat12_fs::traverse(DirectoryEntry* entry){
 
     if (!is_directory(*entry))
@@ -419,9 +433,10 @@ void fat12_fs::traverse(DirectoryEntry* entry){
         std::cout << "              fat_idx: "       << fat_idx << std::endl;
         for (int i = 0; i < entry_cnt_in_block; ++i) {
             auto current_dir = cluster[i];
-/*             std::cout << "Found directory:\n" << current_dir << std::endl;
+            std::cout << "Found directory:\n" << current_dir << std::endl;
             if (is_directory(current_dir)) {
-            } */
+                ;
+            }
         }
 
         fat_entry = FAT[fat_idx]; 

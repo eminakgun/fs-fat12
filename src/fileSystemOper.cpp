@@ -30,7 +30,12 @@ int main(int argc, char* argv[]) {
         std::string operation = argv[2];
         fs.operate(operation, argv[3]);
     }
-    
+    else {
+    }
+
+    fs.traverse_all();
+    //fs.dump_fs();
+    //fs.read_fs();   
     //fs.traverse();
 
     return 0;

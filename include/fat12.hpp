@@ -51,14 +51,13 @@ namespace fat12 {
         uint16_t reserve_cluster();
         int get_entry_cnt(DirectoryEntry* dir);
         bool is_in_root(DirectoryEntry* dir);
-        void dump_fs();
-
-
-
-
+        
     public:
         fat12_fs(string name):name(name){};
         ~fat12_fs(){ dump_fs(); delete[] fs_buffer;};
+        
+        void traverse_all();
+        void dump_fs();
         void create_fs(int size_kb);
         void read_fs();
         // void traverse();

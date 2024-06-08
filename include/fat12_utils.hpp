@@ -33,21 +33,20 @@ namespace fat12 {
             throw std::invalid_argument("FAT indexes 1 and 2 are reserved!");
         }
     }
-
-    void set_time_date(DirectoryEntry& entry) {
+    void set_time_date(DirectoryEntry* entry) {
         // Get current time
         std::time_t t = std::time(nullptr);
         std::tm* now = std::localtime(&t);
 
         // Set time field
-        entry.time = ((now->tm_hour & 0x1F) << 11) |
-                    ((now->tm_min & 0x3F) << 5) |
-                    ((now->tm_sec / 2) & 0x1F);
+        entry->time = ((now->tm_hour & 0x1F) << 11) |
+            ((now->tm_min & 0x3F) << 5) |
+            ((now->tm_sec / 2) & 0x1F);
 
         // Set date field
-        entry.date = (((now->tm_year - 80) & 0x7F) << 9) |
-                    (((now->tm_mon + 1) & 0xF) << 5) |
-                    (now->tm_mday & 0x1F);
+        entry->date = (((now->tm_year - 80) & 0x7F) << 9) |
+            (((now->tm_mon + 1) & 0xF) << 5) |
+            (now->tm_mday & 0x1F);
     }
 
 }//namespace

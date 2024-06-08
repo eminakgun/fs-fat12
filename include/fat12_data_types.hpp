@@ -146,7 +146,6 @@ namespace fat12 {
         char extension[3];             // 3 bytes: File extension
         char password[6];
         uint8_t attributes;            // 1 byte: File attributes
-        uint8_t reserved[2];          // 10 bytes: Reserved
         Timestamp creation;
         Timestamp last_modification;
         uint16_t starting_cluster;     // 2 bytes: Starting cluster number

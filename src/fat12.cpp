@@ -1,6 +1,7 @@
 
 #include "fat12.hpp"
 #include "fat12_utils.hpp"
+#include <ctime>
 
 namespace fat12 {
 
@@ -39,15 +40,27 @@ namespace fat12 {
         if (entry.attributes & ATTR_ARCHIVE) os << "Archive ";
         os << std::endl;
 
-        os << "Reserved: ";
-        for (int i = 0; i < 2; ++i) {
-            os << static_cast<int>(entry.reserved[i]) << " ";
-        }
-        os << std::endl;
-        os << "Creation Time: " << entry.creation.time << std::endl;
-        os << "Creation Date: " << entry.creation.date << std::endl;
-        os << "Last Modificaiton Time: " << entry.creation.time << std::endl;
-        os << "Last Modificaiton Date: " << entry.creation.date << std::endl;
+        std::tm tm_creation;
+        std::tm tm_last_modified;
+        
+        get_time_date(&(entry.creation), &tm_creation);
+        get_time_date(&(entry.last_modification), &tm_last_modified);
+
+        // Print using strftime to format the date and time
+        char buffer[100];
+        // Format creation date, time
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", &tm_creation);
+        os << "Creation Date: " << buffer << std::endl;
+        std::strftime(buffer, sizeof(buffer), "%H:%M:%S", &tm_creation);
+        std::cout << "Creation Time: " << buffer << std::endl;
+
+        // Format last modified date, time
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", &tm_last_modified);
+        os << "Last Modificaiton Date: " << buffer << std::endl;
+        std::strftime(buffer, sizeof(buffer), "%H:%M:%S", &tm_last_modified);
+        std::cout << "Last Modificaiton Time: " << buffer << std::endl;
+
+
         os << "Starting Cluster: " << entry.starting_cluster << std::endl;
         os << "File Size: " << entry.file_size << std::endl;
         return os;
@@ -56,7 +69,7 @@ namespace fat12 {
     void fat12_fs::dump_fs() {
         std::cout << "DUMP FILESYSTEM! size: " << total_size_bytes << std::endl;
 
-        traverse_all();
+        //traverse_all();
 
         std::ofstream ofs(name, std::ios::out | std::ios::binary);
         if (!ofs.is_open()) {
@@ -212,7 +225,7 @@ namespace fat12 {
         // Parse root directory entries
         this->root = reinterpret_cast<DirectoryEntry*>(&fs_buffer[root_dir_start]);
         for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
-            if (!is_directory_free(root[i]))
+            if (!is_entry_free(root[i]))
             {
                 std::cout << i << "th Directory:\n" << root[i] << std::endl;
                 traverse(&root[i]);
@@ -223,10 +236,33 @@ namespace fat12 {
     }
 
     void fat12_fs::operate(const string& operation, const string& param) {
+        std::cout << "Operating: " << operation << " " << param << std::endl;
         try {
-            if (operation == "mkdir") {
+            if ("mkdir" == operation) {
                 mkdir(param);
-            } else {
+            } 
+            else if ("dir" == operation)
+            {
+                dir(param);
+            }
+            else if ("write" == operation)
+            {
+                write(param);
+            }
+            else if ("read" == operation)
+            {
+                read(param);
+            }
+            else if ("chmod" == operation)
+            {
+                chmod(param);
+            }
+            else if ("dumpe2fs" == operation)
+            {
+                dumpe2fs();
+            }
+            
+            else {
                 throw std::runtime_error("Unsupported operation: " + operation);
             }
         } catch (const std::exception& e) {
@@ -234,80 +270,23 @@ namespace fat12 {
         }
     }
 
-    FatEntry fat12_fs::read_fat_entry(uint16_t cluster) {
-        // Calculate the byte offset in the FAT
-        uint32_t fat_offset = cluster + (cluster / 2);
-
-        // Read the FAT entry (2 bytes)
-        FatEntry entry = (FAT[fat_offset] | (FAT[fat_offset + 1] << 8));
-
-        // Mask the high nibble if cluster number is odd
-        if (cluster & 1) {
-            entry >>= 4;
-        }
-        else {
-            entry &= 0xFFF;
-        }
-
-        return entry;
-    }
-
-    // Function to write a FAT entry
-    void fat12_fs::write_fat_entry(uint16_t cluster, FatEntry value) {
-        // Calculate the byte offset in the FAT
-        uint32_t fat_offset = cluster + (cluster / 2);
-
-        // Mask the high nibble if cluster number is odd
-        if (cluster & 1) {
-            FAT[fat_offset] = (FAT[fat_offset] & 0xF0) | (value >> 8);
-            FAT[fat_offset + 1] = value & 0xFF;
-        }
-        else {
-            FAT[fat_offset] = value & 0xFF;
-            FAT[fat_offset + 1] = (FAT[fat_offset + 1] & 0x0F) | ((value & 0xF00) >> 4);
-        }
-    }
-
-
     void fat12_fs::mkdir(const string& path) {
-        std::vector<string> tokens;
-        size_t start = 0, end;
-        // Tokenize the path using '/'
         std::cout << "Processing mkdir " << path << std::endl;
-        if (path[0] != '/')
-        {
-            throw std::invalid_argument("Relative paths are not supported!");
-        }
-
-        std::cout << "tokens: ";
-        while ((end = path.find('/', start)) != string::npos) {
-            auto str = path.substr(start, end - start);
-            if (str != "")
-            {
-                tokens.push_back(str);
-                std::cout << str << ", ";
-            }
-            start = end + 1;
-        }
-        tokens.push_back(path.substr(start)); // Add the last token
-        std::cout << path.substr(start) << std::endl;
-        // end tokenize
-        std::cout << "end tokenize" << std::endl;
-
-
+        auto tokens = tokenize(path);
         // Initialize variables
         bool duplicate = false;
         DirectoryEntry* target_dir = root;
         DirectoryEntry* empty_dir = nullptr;
         string dir_name;
+
         // Trying to mkdir in root
         if (tokens.size() == 1)
         {
-            auto dir_name = tokens[0];
+            dir_name = tokens[0];
             std::cout << "Attempt to create directory " << dir_name << " in Root: " << root << std::endl;
             for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
                 //std::cout << "Loop: " << i << std::endl;
-                if (!is_directory_free(root[i])) {
+                if (!is_entry_free(root[i])) {
                     //std::cout << "Found existing directory!" << std::endl;
                     if (root[i].filename == dir_name) {
                         std::cout << "Found duplicate directory!" << std::endl;
@@ -342,7 +321,12 @@ namespace fat12 {
                 }
             }
             target_dir = next_dir;
-            empty_dir = find_empty_dir(next_dir);
+            //target_dir = find_dir_recursive(tokens);
+        }
+        std::cout << "Target dir: " << *target_dir << std::endl;
+
+        if (target_dir != nullptr) {
+            empty_dir = find_empty_dir(target_dir);
         }
 
         if (empty_dir != nullptr) {
@@ -351,6 +335,254 @@ namespace fat12 {
         else {
             std::cerr << "Couldn't find an empty directory under" << target_dir->filename << std::endl;
         }
+    }
+
+    void fat12_fs::dir(const string& path) {
+        // TODO Must also handle file names
+
+        auto tokens = tokenize(path);
+
+        DirectoryEntry* target_dir = root;
+        string dir_name;
+
+        if (tokens.size() == 1 && tokens[0] == "")
+        {
+            // list root directory
+            for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i)
+                if (is_directory(root[i]))
+                    std::cout << root[i] << std::endl;
+        }
+        else {
+            target_dir = find_dir_recursive(tokens);
+            if (target_dir != nullptr) {
+                auto it = iterator(target_dir);
+                while (it->has_next()) {
+                    auto dir = it->next();
+                    if (!is_entry_free(*dir))
+                        std::cout << *dir << std::endl;
+                }
+            }
+        }
+    }
+
+    void fat12_fs::write(const string& path) {
+        std::vector<std::string> tokens;
+        std::string token;
+        std::istringstream iss(path);
+
+        // process path parame
+        while (std::getline(iss, token, ' ')) {
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() != 2)
+        {
+            throw std::invalid_argument("Invalid arguments");
+        }
+        
+        std::cout << "Processing: " << tokens[0] << " , " << tokens[1] << std::endl;
+        auto target_path = tokens[0];
+
+        string content = read_linux_file(tokens[1]);
+
+        std::cout << "File content to be copied:\n" << content << std::endl;
+
+        auto path_tokens = tokenize(target_path);
+        string& fname = path_tokens[path_tokens.size()-1]; // last token
+        path_tokens.pop_back(); // remove last token, i.e file name
+
+        std::cout << "path_tokens size: " << path_tokens.size() << std::endl;
+        for (size_t i = 0; i < path_tokens.size(); i++)
+        {
+            std::cout << "i: " << path_tokens[i] << std::endl;
+        }
+        
+        DirectoryEntry* target_dir = root;
+        if (path_tokens.size() > 0)
+        {
+            target_dir = find_dir_recursive(path_tokens);
+        }
+        std::cout << "Target dir: " << *target_dir << std::endl;
+
+        if (target_dir != nullptr) {
+            auto empty = find_empty_dir(target_dir); 
+            if (empty != nullptr) {
+                std::cout << "Empty: " << *empty << std::endl;
+                create_file(empty, target_dir, fname);
+                std::cout << "Updated Empty: " << *empty << std::endl;
+                // Copy linux permission
+                empty->attributes += read_linux_permissions(tokens[1]);
+                
+                // TODO we must check content size, and allocate depending on size
+                write_file(empty, content);
+            }   
+        }
+    }
+
+    void fat12_fs::read(const string& path) {
+        std::vector<std::string> tokens;
+        std::string token;
+        std::istringstream iss(path);
+
+        // process path parame
+        while (std::getline(iss, token, ' ')) {
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() != 2)
+        {
+            throw std::invalid_argument("Invalid arguments");
+        }
+        
+        std::cout << "Processing: " << tokens[0] << " , " << tokens[1] << std::endl;
+        auto fat_path = tokens[0];
+        auto linux_file_path = tokens[1];
+
+        auto path_tokens = tokenize(fat_path);
+        string& fname = path_tokens[path_tokens.size()-1]; // last token
+        path_tokens.pop_back(); // remove last token, i.e file name
+
+        auto target_dir = find_dir_recursive(path_tokens);
+        std::cout << "Target dir: " << *target_dir << std::endl;
+        if (target_dir != nullptr) {
+            auto it = iterator(target_dir);
+            while (it->has_next())
+            {
+                auto entry = it->next();
+                if (entry->filename == fname) {
+                    if (!is_readable(*entry)) {
+                        throw std::runtime_error("Target file does not have read permission!");
+                    }
+                    
+                    std::cout << "Found a file to read!" << std::endl;
+                    char* file_cluster_base = reinterpret_cast<char*>(&data_area[entry->starting_cluster]);
+        
+                    string file_content(file_cluster_base);
+                    std::cout << "Read file content: " << file_content << std::endl;
+
+                    std::cout << "Now write to a linux file!" << std::endl;
+                    std::ofstream outfile(linux_file_path);
+
+                    // Check if the file is opened successfully
+                    if (!outfile.is_open()) {
+                        throw std::invalid_argument("Error opening file: " + linux_file_path);
+                    }
+
+                    // Write the string to the file
+                    outfile << file_content;
+
+                    // Close the file
+                    outfile.close();
+                }
+            }
+        }
+    }
+
+    void fat12_fs::chmod(const string& path) {
+        std::vector<std::string> tokens;
+        std::string token;
+        std::istringstream iss(path);
+
+        // process path parame
+        while (std::getline(iss, token, ' ')) {
+            tokens.push_back(token);
+        }
+
+        if (tokens.size() != 2)
+        {
+            throw std::invalid_argument("Invalid number of arguments: " + path);
+        }
+        
+        std::cout << "Processing: " << tokens[0] << " , " << tokens[1] << std::endl;
+        auto fat_path = tokens[0];
+        string permissions = tokens[1];
+
+        if (permissions.size() < 2) {
+            throw std::invalid_argument("Invalid permission argument: " + permissions);
+        }
+
+        auto path_tokens = tokenize(fat_path);
+        string& fname = path_tokens[path_tokens.size()-1]; // last token
+        path_tokens.pop_back(); // remove last token, i.e file name
+
+        auto target_dir = find_dir_recursive(path_tokens);
+        if (target_dir = nullptr) {
+            std::cout << "Directory search failed! " << fat_path << std::endl;
+            return;
+        }
+        
+        std::cout << "Target dir: " << *target_dir << std::endl;
+        if (target_dir != nullptr) {
+            auto it = iterator(target_dir);
+            while (it->has_next())
+            {
+                auto entry = it->next();
+                if (entry->filename == fname) {
+                    std::cout << "Found the file to change permissions!" << std::endl;
+
+                    std::string permission = permissions.substr(0, 1);
+                    if (permission == "+") {
+                        std::cout << "The first character is +" << std::endl;
+                        for (size_t i = 1; i < permissions.size(); ++i) {
+                            if (permissions[i] == 'r') {
+                                std::cout << "Read permission granted on file " << fname << std::endl;
+                                entry->attributes |= ATTR_READABLE;
+                            } else if (permissions[i] == 'w') {
+                                std::cout << "Write permission granted on file " << fname << std::endl;
+                                entry->attributes |= ATTR_WRITABLE;
+                            }
+                        }
+                    } else if (permission == "-") {
+                        std::cout << "The first character is -" << std::endl;
+                        for (size_t i = 1; i < permissions.size(); ++i) {
+                            if (permissions[i] == 'r') {
+                                std::cout << "Read permission revoked on file " << fname << std::endl;
+                                entry->attributes &= ~ATTR_READABLE;
+                            } else if (permissions[i] == 'w') {
+                                std::cout << "Write permission revoked on file " << fname << std::endl;
+                                entry->attributes &= ~ATTR_WRITABLE;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void fat12_fs::dumpe2fs() {
+        // Print file system information
+        std::cout << *boot_sector << std::endl;
+        std::cout << "Block size:" << block_size_byte << " bytes" << std::endl;
+        std::cout << "FAT1 Start: " << fat1_start << std::endl;
+        std::cout << "FAT2 Start: " << fat2_start << std::endl;
+        std::cout << "Root Directory Start: " << root_dir_start << std::endl;
+        std::cout << "Data Area Start: " << data_area_start << std::endl;
+        // TODO
+        // list block count, free blocks,
+        // number of files and directories.
+        // list all the occupied blocks and the file names for each of them.
+    }
+
+    void fat12_fs::write_file(DirectoryEntry* file, string& content) {
+        auto content_char = reinterpret_cast<char*>(&content);
+        
+        // write content
+        char* char_ptr = reinterpret_cast<char*>(&data_area[file->starting_cluster]);
+        strcpy(char_ptr, content.c_str()); 
+        file->file_size = content.size();
+    }
+    
+
+    //
+
+    void fat12_fs::print_cluster(uint16_t cluster) {
+/*         auto it = iterator(cluster);
+        while (it->has_next())
+        {
+            auto ch = reinterpret_cast<char>(it->next_char());
+            std::cout << ch;
+        }
+        std::cout << std::endl; */
     }
 
     bool fat12_fs::is_in_root(DirectoryEntry* dir) {
@@ -364,13 +596,56 @@ namespace fat12 {
             : entry_cnt_in_block;
     }
 
+    DirectoryEntry* fat12_fs::find_dir_recursive(std::vector<std::string> tokens) {
+        DirectoryEntry* target_dir = root;
+        string dir_name;
+        bool found = false;
+
+        for (auto& token : tokens) {
+            dir_name = token;
+            
+            target_dir = find_dir(target_dir, token);
+            if (target_dir == nullptr) {
+                std::cout << "break search!"<< std::endl;
+                std::cout << target_dir << std::endl;
+                break;
+            }
+            else
+                found = true;         
+        }
+
+        if (found == true && target_dir != nullptr) {
+            std::cout << "Reached target directory:," << dir_name << std::endl;
+            std::cout << *target_dir << std::endl;
+        }
+
+        return target_dir;
+    }
+
     DirectoryEntry* fat12_fs::find_dir(DirectoryEntry* current, string& dir_name) {
         int entry_cnt = is_in_root(current) ? boot_sector->BPB_RootEntCnt
-            : entry_cnt_in_block;
+                                            : entry_cnt_in_block;
+        std::cout << "Searching " << dir_name << " under folder: " << current->filename << std::endl;
+        std::cout << *current << std::endl;
+
+/*         auto it = iterator(current);
+        while (it->has_next()) {
+            auto next = it->next();
+            if (!is_entry_free(*next)) {
+                if (is_directory(*next)) {
+                    if (next->filename == dir_name) {
+                        return next;
+                    }
+                }
+            }
+        } */
+        
         for (int i = 0; i < entry_cnt; ++i) {
-            if (!is_directory_free(current[i])) {
-                if (current[i].filename == dir_name) {
-                    return &current[i];
+            if (!is_entry_free(current[i])) {
+                if (is_directory(current[i])) {
+                    if (current[i].filename == dir_name) {
+                        return &current[i];
+                    }
                 }
             }
         }
@@ -385,36 +660,41 @@ namespace fat12 {
 
         if (is_in_root(current)) {
             std::cout << current->filename << " is inside root directory" << std::endl;
+            for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i)
+                if (is_entry_free(root[i]))
+                    return &root[i];
         }
+        else {
+            for (int i = 0; i < entry_cnt; ++i) {
+                if (is_directory(current[i])) {
+                    std::cout << "Check directory: " << current[i].filename << std::endl;
+                    auto fat_idx = current[i].starting_cluster;
+                    auto cluster_num = fat_idx;
+                    check_fat_idx(fat_idx);
 
-        for (int i = 0; i < entry_cnt; ++i) {
-            if (is_directory(current[i])) {
-                std::cout << "Check directory: " << current[i].filename << std::endl;
-                auto fat_idx = current[i].starting_cluster;
-                auto cluster_num = fat_idx;
-                check_fat_idx(fat_idx);
+                    FatEntry fat_entry;
+                    do {
+                        auto cluster_start = cluster_num * block_size_byte;
+                        auto cluster = reinterpret_cast<DirectoryEntry*>(&data_area[cluster_start]);
 
-                FatEntry fat_entry;
-                do {
-                    auto cluster_start = cluster_num * block_size_byte;
-                    auto cluster = reinterpret_cast<DirectoryEntry*>(&data_area[cluster_start]);
-
-                    std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
-                    std::cout << "              cluster_start: " << cluster_start << std::endl;
-                    for (int i = 0; i < entry_cnt_in_block; ++i) {
-                        if (is_directory_free(cluster[i])) {
-                            std::cout << "Found empty directory at index " << i << std::endl;
-                            return &cluster[i];
+                        std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
+                        std::cout << "              cluster_start: " << cluster_start << std::endl;
+                        for (int i = 0; i < entry_cnt_in_block; ++i) {
+                            if (is_entry_free(cluster[i])) {
+                                std::cout << "Found empty directory at index " << i << std::endl;
+                                return &cluster[i];
+                            }
+                                
                         }
-                            
-                    }
 
-                    fat_entry = FAT[fat_idx];
-                    cluster_num = fat_entry;
-                } while (!is_last_cluster(fat_entry));
-                std::cout << "End search empty cluster" << std::endl;
+                        fat_entry = FAT[fat_idx];
+                        cluster_num = fat_entry;
+                    } while (!is_last_cluster(fat_entry));
+                    std::cout << "End search empty cluster" << std::endl;
+                }
             }
         }
+        
         std::cout << "There's no free directories under: " << current->filename << std::endl;
         return nullptr;
     }
@@ -426,12 +706,9 @@ namespace fat12 {
         std::cout << "traverse_all!!!!" << std::endl;
         this->root = reinterpret_cast<DirectoryEntry*>(&fs_buffer[root_dir_start]);
         for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
-            if (!is_directory_free(root[i]))
-            {
-                std::cout << i << "th Directory:\n" << root[i] << std::endl;
-                if (is_directory(root[i])) {
-                    traverse(&root[i]);
-                }
+            if (!is_entry_free(root[i])) {
+                std::cout << i << "th Directory under root:\n" << root[i] << std::endl;
+                traverse(&root[i]);
             }
         }
     }
@@ -452,11 +729,11 @@ namespace fat12 {
             auto cluster_start = cluster_num * block_size_byte;
             auto cluster = reinterpret_cast<DirectoryEntry*>(&data_area[cluster_start]);
 
-            std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
+/*             std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
             std::cout << "              cluster_start: " << cluster_start << std::endl;
-            std::cout << "              fat_idx: " << fat_idx << std::endl;
+            std::cout << "              fat_idx: " << fat_idx << std::endl; */
             for (int i = 0; i < entry_cnt_in_block; ++i) {
-                if (is_directory(cluster[i])) {
+                if (!is_entry_free(cluster[i])) {
                     std::cout << "Found directory:\n" << cluster[i] << std::endl;
                     if (i >= 2 && !is_in_root(&cluster[i])) {
                         traverse(&cluster[i]);
@@ -467,6 +744,23 @@ namespace fat12 {
             fat_entry = FAT[fat_idx];
             cluster_num = fat_entry;
         } while (!is_last_cluster(fat_entry));
+    }
+
+
+    void fat12_fs::create_file(DirectoryEntry* empty, DirectoryEntry* parent, string file_name) {
+        std::cout << "Attemp to create a file: " << file_name
+                  << ", Under parent directory: " << parent->filename << std::endl;
+
+        
+        uint16_t new_cluster = reserve_cluster();
+        std::cout << "Reserved a new cluster: " << new_cluster << std::endl;
+        std::strncpy(empty->filename, file_name.c_str(), file_name.size());
+        empty->file_size = 0;
+        empty->starting_cluster = new_cluster;
+        set_time_date(&(empty->creation));
+        set_time_date(&(empty->last_modification));
+        set_time_date(&(parent->last_modification));
+        std::cout << "Created a file: " << file_name << "\n" << empty << std::endl;
     }
 
     void fat12_fs::create_dir(DirectoryEntry* empty, DirectoryEntry* parent, string& dir_name) {

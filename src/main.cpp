@@ -40,6 +40,22 @@ void test() {
     fs->operate("mkdir", "/usr");
     fs->operate("mkdir", "/usr/ysa");
     fs->operate("mkdir", "/bin/ysa");
+    fs->operate("write", "/usr/ysa/file1 test_file.data");
+    //fs->operate("write", "/usr/file2 test_file.data");
+    //fs->operate("write", "/file3 test_file.data");
+    fs->traverse_all();
+
+    //fs->operate("dir", "/");
+    //fs->operate("dir", "/usr");
+    //fs->operate("dir", "/usr/ysa");
+    //fs->operate("write", "/usr/ysa/file1 test_file.txt");
+    //fs->operate("read", "/usr/ysa/file1 read_file.txt");
+
+    //fs->operate("chmod", "/usr/ysa/file1 -rw");
+    //fs->operate("read", "/usr/ysa/file1 read_file.txt"); // fails due to permissions
+    //fs->operate("chmod", "/usr/ysa/file1 +rw");
+    //fs->operate("read", "/usr/ysa/file1 read_file.txt"); // succeeds
+    //fs->operate("dumpe2fs", "");
     //fs->traverse_all();
     
     delete fs;

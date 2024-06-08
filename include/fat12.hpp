@@ -64,7 +64,10 @@ namespace fat12 {
     public:
     
         fat12_fs(string name):name(name){};
-        ~fat12_fs(){ dump_fs(); delete[] fs_buffer;};
+        ~fat12_fs(){ 
+            //dump_fs(); 
+            delete[] fs_buffer;
+        };
 
         // commands
         void mkdir(const string& path);

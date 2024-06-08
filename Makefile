@@ -45,8 +45,15 @@ clean:
 oper:
 	@echo "building $@..."
 
-all: makefs operfs
+main: clean $(OBJS)
+	@echo "building $@"
+	$(CC) $(CFLAGS) $(OBJS) -o test
+	$(CC) $(CFLAGS) $(OBJS) -DMAKEFILESYSTEM -o makeFileSystem
+	$(CC) $(CFLAGS) $(OBJS) -DFILESYSTEMOPER -o fileSystemOper
+#./test
+
+all: main
 
 $(BINDIR)/%.o: $(SRCDIR)/%.cpp
-	@echo "building $@, $<, $@..."
+	@echo "building $@, $<..."
 	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@

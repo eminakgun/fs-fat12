@@ -28,10 +28,11 @@ namespace fat12 {
         os << "===================DirectoryEntry===============\n";
         os << "Filename: " << entry.filename << std::endl;
         os << "Extension: " << entry.extension << std::endl;
+        os << "Password: " << entry.password << std::endl;
 
         os << "Attributes: ";
-        if (entry.attributes & ATTR_READ_ONLY) os << "Read Only ";
-        if (entry.attributes & ATTR_HIDDEN) os << "Hidden ";
+        if (entry.attributes & ATTR_READABLE) os << "+R ";
+        if (entry.attributes & ATTR_WRITABLE) os << "+W ";
         if (entry.attributes & ATTR_SYSTEM) os << "System ";
         if (entry.attributes & ATTR_VOLUME_ID) os << "Volume ID ";
         if (entry.attributes & ATTR_DIRECTORY) os << "Directory ";
@@ -39,12 +40,14 @@ namespace fat12 {
         os << std::endl;
 
         os << "Reserved: ";
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 2; ++i) {
             os << static_cast<int>(entry.reserved[i]) << " ";
         }
         os << std::endl;
-        os << "Time: " << entry.time << std::endl;
-        os << "Date: " << entry.date << std::endl;
+        os << "Creation Time: " << entry.creation.time << std::endl;
+        os << "Creation Date: " << entry.creation.date << std::endl;
+        os << "Last Modificaiton Time: " << entry.creation.time << std::endl;
+        os << "Last Modificaiton Date: " << entry.creation.date << std::endl;
         os << "Starting Cluster: " << entry.starting_cluster << std::endl;
         os << "File Size: " << entry.file_size << std::endl;
         return os;
@@ -52,6 +55,9 @@ namespace fat12 {
 
     void fat12_fs::dump_fs() {
         std::cout << "DUMP FILESYSTEM! size: " << total_size_bytes << std::endl;
+
+        traverse_all();
+
         std::ofstream ofs(name, std::ios::out | std::ios::binary);
         if (!ofs.is_open()) {
             throw std::invalid_argument("Error opening input file: " + name);
@@ -217,8 +223,14 @@ namespace fat12 {
     }
 
     void fat12_fs::operate(const string& operation, const string& param) {
-        if (operation == "mkdir") {
-            mkdir(param);
+        try {
+            if (operation == "mkdir") {
+                mkdir(param);
+            } else {
+                throw std::runtime_error("Unsupported operation: " + operation);
+            }
+        } catch (const std::exception& e) {
+            std::cout << "Exception occurred: " << e.what() << std::endl;
         }
     }
 
@@ -283,7 +295,9 @@ namespace fat12 {
         std::cout << "end tokenize" << std::endl;
 
 
+        // Initialize variables
         bool duplicate = false;
+        DirectoryEntry* target_dir = root;
         DirectoryEntry* empty_dir = nullptr;
         string dir_name;
         // Trying to mkdir in root
@@ -293,7 +307,7 @@ namespace fat12 {
             std::cout << "Attempt to create directory " << dir_name << " in Root: " << root << std::endl;
             for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
                 //std::cout << "Loop: " << i << std::endl;
-                if (!is_directory_free(root[i]) && is_directory(root[i])) {
+                if (!is_directory_free(root[i])) {
                     //std::cout << "Found existing directory!" << std::endl;
                     if (root[i].filename == dir_name) {
                         std::cout << "Found duplicate directory!" << std::endl;
@@ -327,10 +341,15 @@ namespace fat12 {
                     }
                 }
             }
-
+            target_dir = next_dir;
             empty_dir = find_empty_dir(next_dir);
-            if (empty_dir != nullptr)
-                create_dir(empty_dir, next_dir, dir_name);
+        }
+
+        if (empty_dir != nullptr) {
+            create_dir(empty_dir, target_dir, dir_name);
+        }
+        else {
+            std::cerr << "Couldn't find an empty directory under" << target_dir->filename << std::endl;
         }
     }
 
@@ -349,11 +368,9 @@ namespace fat12 {
         int entry_cnt = is_in_root(current) ? boot_sector->BPB_RootEntCnt
             : entry_cnt_in_block;
         for (int i = 0; i < entry_cnt; ++i) {
-            if (is_directory(current[i])) {
-                if (!is_directory_free(current[i])) {
-                    if (current[i].filename == dir_name) {
-                        return &current[i];
-                    }
+            if (!is_directory_free(current[i])) {
+                if (current[i].filename == dir_name) {
+                    return &current[i];
                 }
             }
         }
@@ -444,7 +461,6 @@ namespace fat12 {
                     if (i >= 2 && !is_in_root(&cluster[i])) {
                         traverse(&cluster[i]);
                     }
-                    
                 }
             }
 
@@ -464,7 +480,9 @@ namespace fat12 {
         empty->attributes = ATTR_DIRECTORY;
         empty->file_size = 0;
         empty->starting_cluster = new_cluster;
-        set_time_date(empty);
+        set_time_date(&(empty->creation));
+        set_time_date(&(empty->last_modification));
+        set_time_date(&(parent->last_modification)); // update paren'ts last modification timestamp
         initialize_new_dir(new_cluster, empty, parent);
     }
 

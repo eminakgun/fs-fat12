@@ -161,6 +161,8 @@ namespace fat12 {
     const uint8_t ATTR_VOLUME_ID = 0x08;
     const uint8_t ATTR_DIRECTORY = 0x10;
     const uint8_t ATTR_ARCHIVE = 0x20;
+    const uint8_t ATTR_PASSWORD_PROTECTED = 0x40;
+
 
     const unsigned char DIR_NAME_FREE[2] = {0xE5, 0x00}; 
 

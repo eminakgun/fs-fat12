@@ -6,13 +6,15 @@
 #include <ctime>
 
 namespace fat12 {
-    bool is_directory_free(const DirectoryEntry& entry) {
-        // Check if the first byte of the filename matches either DIR_NAME_FREE value
-        return entry.filename[0] == DIR_NAME_FREE[0] || entry.filename[0] == DIR_NAME_FREE[1];
-    }
-
+    
     bool is_directory(const DirectoryEntry& entry) {
         return entry.attributes & ATTR_DIRECTORY;
+    }
+
+    bool is_directory_free(const DirectoryEntry& entry) {
+        // Check if the first byte of the filename matches either DIR_NAME_FREE value
+        return is_directory(entry) && 
+                entry.filename[0] == DIR_NAME_FREE[0] || entry.filename[0] == DIR_NAME_FREE[1];
     }
 
     bool is_file(const DirectoryEntry& entry) {
@@ -33,18 +35,18 @@ namespace fat12 {
             throw std::invalid_argument("FAT indexes 1 and 2 are reserved!");
         }
     }
-    void set_time_date(DirectoryEntry* entry) {
+    void set_time_date(Timestamp* ts) {
         // Get current time
         std::time_t t = std::time(nullptr);
         std::tm* now = std::localtime(&t);
 
         // Set time field
-        entry->time = ((now->tm_hour & 0x1F) << 11) |
+        ts->time = ((now->tm_hour & 0x1F) << 11) |
             ((now->tm_min & 0x3F) << 5) |
             ((now->tm_sec / 2) & 0x1F);
 
         // Set date field
-        entry->date = (((now->tm_year - 80) & 0x7F) << 9) |
+        ts->date = (((now->tm_year - 80) & 0x7F) << 9) |
             (((now->tm_mon + 1) & 0xF) << 5) |
             (now->tm_mday & 0x1F);
     }

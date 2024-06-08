@@ -131,23 +131,32 @@ namespace fat12 {
     const uint8_t  MEDIA_NONREMOVABLE = 0xF8;
     const uint16_t EOC_MARKER = 0xFFF;
 
+
+    #pragma pack(push, 1)
+    struct Timestamp {
+        uint16_t time;
+        uint16_t date;
+    };
+    #pragma pack(pop)
+
     // Ensure packing of the struct to match the exact layout expected in FAT12
     #pragma pack(push, 1)
     struct DirectoryEntry {
         char filename[8];              // 8 bytes: Filename
         char extension[3];             // 3 bytes: File extension
+        char password[6];
         uint8_t attributes;            // 1 byte: File attributes
-        uint8_t reserved[10];          // 10 bytes: Reserved
-        uint16_t time;                 // 2 bytes: Time of creation or last modification
-        uint16_t date;                 // 2 bytes: Date of creation or last modification
+        uint8_t reserved[2];          // 10 bytes: Reserved
+        Timestamp creation;
+        Timestamp last_modification;
         uint16_t starting_cluster;     // 2 bytes: Starting cluster number
         uint32_t file_size;            // 4 bytes: Size of the file in bytes
     };
     #pragma pack(pop)
 
     // Define legal file attribute types as constants
-    const uint8_t ATTR_READ_ONLY = 0x01;
-    const uint8_t ATTR_HIDDEN = 0x02;
+    const uint8_t ATTR_READABLE = 0x01;
+    const uint8_t ATTR_WRITABLE = 0x02;
     const uint8_t ATTR_SYSTEM = 0x04;
     const uint8_t ATTR_VOLUME_ID = 0x08;
     const uint8_t ATTR_DIRECTORY = 0x10;

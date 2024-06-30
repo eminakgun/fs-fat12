@@ -53,6 +53,34 @@ Root directory is made up of 14 sectors,
 
 # FAT12 Project Report
 
+## Memory Layout
+
+In the FAT12 memory layout, the structure consists of several key components:
+
+1. **Boot Sector**:
+   - The Boot Sector is the first sector of the disk and contains essential information for initializing the file system.
+   - It includes details like the file system type (FAT12), the size of each sector, the number of sectors per cluster, and the number of reserved sectors.
+   - Additionally, it holds the BIOS Parameter Block (BPB) which provides critical disk geometry information.
+
+2. **FAT1 and FAT2**:
+   - The File Allocation Tables (FAT1 and FAT2) are arrays that map out the allocation status of clusters on the disk.
+   - Each entry in the FAT corresponds to a cluster on the disk and indicates whether the cluster is free, reserved, or allocated to a file.
+   - FAT1 and FAT2 are typically identical copies to provide redundancy and fault tolerance.
+   - In FAT12, each entry in the FAT is 12 bits long, allowing for 4096 possible cluster values.
+
+3. **Root Directory**:
+   - Following the FATs is the Root Directory, which is a special directory containing entries for files and subdirectories located at the root of the file system.
+   - In FAT12, the Root Directory has a fixed size and is allocated a specific number of entries, each representing a file or subdirectory.
+   - Each directory entry contains metadata about the file, such as its name, size, attributes, and starting cluster number.
+
+4. **Data Area**:
+   - Beyond the Root Directory lies the Data Area, which is where the actual file data is stored.
+   - The Data Area is divided into clusters, with each cluster being a fixed size (typically 512 bytes in FAT12).
+   - Files are stored across one or more clusters, with the FAT entries used to track the allocation of clusters for each file.
+   - The Data Area extends until the end of the disk and is where the content of files is stored.
+
+Overall, the FAT12 memory layout is structured to efficiently manage file storage and retrieval on disk, with each component playing a crucial role in organizing and maintaining the file system's integrity and accessibility.
+
 ## Directory Table and Directory Entries
 
 ### Directory Entries

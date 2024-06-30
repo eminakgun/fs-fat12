@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
         #ifdef FILESYSTEMOPER
             filesystemoper(argc, argv);
         #else
-            test();
+            //test();
         #endif
     #endif
 
@@ -97,9 +97,9 @@ void filesystemoper(int argc, char* argv[]) {
     fat12_fs fs(file_system_path);
 
     fs.read_fs();
-    if (operate)
-    {
+    if (operate) {
         std::string operation = argv[2];
         fs.operate(operation, argv[3]);
     }
+    fs.dump_fs();
 }

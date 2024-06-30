@@ -206,7 +206,10 @@ namespace fat12 {
         std::cout << "sizeof(DirectoryEntry): " << sizeof(DirectoryEntry) << std::endl;
 
         // Calculate the starting addresses
-        fat1_start = fat_size_bytes;
+        // TODO fat1_start  must be right after reserved area (a.k.a boot sector),
+        // BPB_BytsPerSec * BPB_RsvdSecCnt
+        // see format()
+        fat1_start = fat_size_bytes; 
         fat2_start = fat1_start + fat_size_bytes;
 
         root_dir_start = fat2_start + fat_size_bytes;
@@ -270,6 +273,7 @@ namespace fat12 {
         }
     }
 
+    // TODO check write permission
     void fat12_fs::mkdir(const string& path) {
         std::cout << "Processing mkdir " << path << std::endl;
         auto tokens = tokenize(path);
@@ -278,10 +282,9 @@ namespace fat12 {
         DirectoryEntry* target_dir = root;
         DirectoryEntry* empty_dir = nullptr;
         string dir_name;
-
+        
         // Trying to mkdir in root
-        if (tokens.size() == 1)
-        {
+        if (tokens.size() == 1) {
             dir_name = tokens[0];
             std::cout << "Attempt to create directory " << dir_name << " in Root: " << root << std::endl;
             for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i) {
@@ -297,10 +300,6 @@ namespace fat12 {
                 else {
                     empty_dir = &root[i];
                 }
-            }
-
-            if (empty_dir != nullptr) {
-                create_dir(empty_dir, root, dir_name);
             }
         }
         else {
@@ -322,12 +321,12 @@ namespace fat12 {
             }
             target_dir = next_dir;
             //target_dir = find_dir_recursive(tokens);
+            if (target_dir != nullptr) {
+                empty_dir = find_empty_dir(target_dir);
+            }
         }
         std::cout << "Target dir: " << *target_dir << std::endl;
 
-        if (target_dir != nullptr) {
-            empty_dir = find_empty_dir(target_dir);
-        }
 
         if (empty_dir != nullptr) {
             create_dir(empty_dir, target_dir, dir_name);
@@ -451,6 +450,7 @@ namespace fat12 {
                 auto entry = it->next();
                 if (entry->filename == fname) {
                     if (!is_readable(*entry)) {
+                        // TODO check parent readability as well.
                         throw std::runtime_error("Target file does not have read permission!");
                     }
                     
@@ -660,38 +660,33 @@ namespace fat12 {
 
         if (is_in_root(current)) {
             std::cout << current->filename << " is inside root directory" << std::endl;
-            for (int i = 0; i < boot_sector->BPB_RootEntCnt; ++i)
-                if (is_entry_free(root[i]))
-                    return &root[i];
         }
-        else {
-            for (int i = 0; i < entry_cnt; ++i) {
-                if (is_directory(current[i])) {
-                    std::cout << "Check directory: " << current[i].filename << std::endl;
-                    auto fat_idx = current[i].starting_cluster;
-                    auto cluster_num = fat_idx;
-                    check_fat_idx(fat_idx);
+        for (int i = 0; i < entry_cnt; ++i) {
+            if (is_directory(current[i])) {
+                std::cout << "Check directory: " << current[i].filename << std::endl;
+                auto fat_idx = current[i].starting_cluster;
+                auto cluster_num = fat_idx;
+                check_fat_idx(fat_idx);
 
-                    FatEntry fat_entry;
-                    do {
-                        auto cluster_start = cluster_num * block_size_byte;
-                        auto cluster = reinterpret_cast<DirectoryEntry*>(&data_area[cluster_start]);
+                FatEntry fat_entry;
+                do {
+                    auto cluster_start = cluster_num * block_size_byte;
+                    auto cluster = reinterpret_cast<DirectoryEntry*>(&data_area[cluster_start]);
 
-                        std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
-                        std::cout << "              cluster_start: " << cluster_start << std::endl;
-                        for (int i = 0; i < entry_cnt_in_block; ++i) {
-                            if (is_entry_free(cluster[i])) {
-                                std::cout << "Found empty directory at index " << i << std::endl;
-                                return &cluster[i];
-                            }
-                                
+                    std::cout << "Searching for cluster_num: " << cluster_num << std::endl;
+                    std::cout << "              cluster_start: " << cluster_start << std::endl;
+                    for (int i = 0; i < entry_cnt_in_block; ++i) {
+                        if (is_entry_free(cluster[i])) {
+                            std::cout << "Found empty directory at index " << i << std::endl;
+                            return &cluster[i];
                         }
+                            
+                    }
 
-                        fat_entry = FAT[fat_idx];
-                        cluster_num = fat_entry;
-                    } while (!is_last_cluster(fat_entry));
-                    std::cout << "End search empty cluster" << std::endl;
-                }
+                    fat_entry = FAT[fat_idx];
+                    cluster_num = fat_entry;
+                } while (!is_last_cluster(fat_entry));
+                std::cout << "End search empty cluster" << std::endl;
             }
         }
         

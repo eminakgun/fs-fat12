@@ -6,7 +6,9 @@ SRCDIR = src
 TESTDIR = test
 
 BINDIR = bin
-SRCS = $(wildcard $(SRCDIR)/*.cpp)
+//SRCS = $(wildcard $(SRCDIR)/*.cpp)
+SRCS = $(filter-out $(SRCDIR)/main.cpp, $(wildcard $(SRCDIR)/*.cpp))
+
 OBJS = $(patsubst $(SRCDIR)/%.cpp, $(BINDIR)/%.o, $(SRCS))
 
 MAKEFS_SRC = $(SRCDIR)/makeFileSystem.cpp
@@ -24,36 +26,33 @@ print:
 	@echo $(TEST_SRCS)
 	@echo $(TEST_OBJS)
 
+$(BINDIR)/%.o: $(SRCDIR)/%.cpp
+	@echo "building $@, $<..."
+	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@
+
 makefs: clean $(MAKEFS_OBJS)
 	@echo "building $@..."
-	$(CC) $(CFLAGS) $(MAKEFS_OBJS) -o makeFileSystem
-#./makeFileSystem 1 1kb-fs
+	$(CC) $(CFLAGS) -I$(INCDIR) -DMAKEFILESYSTEM -c $(SRCDIR)/main.cpp -o $(BINDIR)/main.o
+	$(CC) $(CFLAGS) $(OBJS) $(BINDIR)/main.o -o makeFileSystem
 
 operfs: clean $(OPERFS_OBJS)
 	@echo "building $@..."
-	$(CC) $(CFLAGS) $(OPERFS_OBJS) -o fileSystemOper
-#./fileSystemOper 1kb-fs mkdir "/first_dir"
-#./fileSystemOper 1kb-fs mkdir /some/new_file1
-#./fileSystemOper 1kb-fs mkdir /some/new_dir/new_file2
+	$(CC) $(CFLAGS) -I$(INCDIR) -DFILESYSTEMOPER -c $(SRCDIR)/main.cpp -o $(BINDIR)/main.o
+	$(CC) $(CFLAGS) $(OBJS) $(BINDIR)/main.o -o fileSystemOper
+
+test:
+	$(CC) $(CFLAGS) -I$(INCDIR) $(SRCDIR)/main.cpp -o test
+
+main: clean $(OBJS) makefs operfs test
+	@echo "Build completed."
+
+doc:
+	pandoc README.md -o doc/converted.docx
+
+all: main
 
 clean_fs:
 	rm -rf $(MAKEFS_O) makeFileSystem 1kb-fs
 
 clean:
 	rm -rf bin/*
-
-oper:
-	@echo "building $@..."
-
-main: clean $(OBJS)
-	@echo "building $@"
-	$(CC) $(CFLAGS) $(OBJS) -o test
-	$(CC) $(CFLAGS) $(OBJS) -DMAKEFILESYSTEM -o makeFileSystem
-	$(CC) $(CFLAGS) $(OBJS) -DFILESYSTEMOPER -o fileSystemOper
-#./test
-
-all: main
-
-$(BINDIR)/%.o: $(SRCDIR)/%.cpp
-	@echo "building $@, $<..."
-	$(CC) $(CFLAGS) -I$(INCDIR) -c $< -o $@

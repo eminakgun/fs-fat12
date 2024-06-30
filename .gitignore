@@ -32,6 +32,7 @@
 *.out
 *.app
 
+.vscode
 fileSystemOper
 makeFileSystem
 test
